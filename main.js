@@ -300,7 +300,7 @@ function stopSortSounds() {
 function updateSoundToggle() {
     const button = document.getElementById('sound-toggle');
     button.setAttribute('aria-pressed', String(soundEnabled));
-    button.innerText = soundEnabled ? '🔊 SOUND ON' : '🔇 SOUND OFF';
+    button.innerText = soundEnabled ? '🔊' : '🔇';
 }
 
 async function toggleSortSound() {
