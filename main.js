@@ -19,10 +19,6 @@ async function execute(){
     });
     image.src = './image.png';
 
-    // 음원 준비가 늦거나 자동재생이 차단되어도 시각화는 즉시 시작한다.
-    sortSoundReady ||= prepareSortSound().catch(error => {
-        console.error(error);
-    });
     await imageReady;
 
     const frameDuration = 30
@@ -57,8 +53,14 @@ async function execute(){
             yieldCompare: true, image, ctx, arr: sortedArray, interval:fastInterval, frameDuration,
             generator: accentGenerator, playStepSound: false,
         });
-        await sortSoundReady;
-        await playCompletionSound();
+        if (soundEnabled) {
+            try {
+                await ensureSortSoundReady();
+                if (soundEnabled) await playCompletionSound();
+            } catch (error) {
+                console.error(error);
+            }
+        }
 
     }
 
@@ -181,6 +183,15 @@ let currentAudioSources = [];
 let audioCtx;
 let sortSoundBuffer;
 let sortSoundReady;
+let soundEnabled = false;
+
+function ensureSortSoundReady() {
+    sortSoundReady ||= prepareSortSound().catch(error => {
+        sortSoundReady = undefined;
+        throw error;
+    });
+    return sortSoundReady;
+}
 
 async function prepareSortSound() {
     audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
@@ -197,7 +208,7 @@ async function prepareSortSound() {
 }
 
 function playSortSound({ duration, n, indexes }) {
-    if (!audioCtx || !sortSoundBuffer || indexes.length === 0) return;
+    if (!soundEnabled || !audioCtx || !sortSoundBuffer || indexes.length === 0) return;
 
     // 프레임마다 지나치게 많은 소리가 겹치지 않도록 오래된 소스를 정리한다.
     while (currentAudioSources.length >= 6) {
@@ -238,7 +249,7 @@ function playSortSound({ duration, n, indexes }) {
 }
 
 async function playCompletionSound() {
-    if (!audioCtx || !sortSoundBuffer) return;
+    if (!soundEnabled || !audioCtx || !sortSoundBuffer) return;
 
     if (audioCtx.state !== 'running') {
         audioCtx.resume().catch(() => {});
@@ -266,9 +277,49 @@ async function playCompletionSound() {
 
         source.connect(gainNode);
         gainNode.connect(audioCtx.destination);
-        source.onended = resolve;
+        currentAudioSources.push(source);
+        source.onended = () => {
+            currentAudioSources = currentAudioSources.filter(item => item !== source);
+            resolve();
+        };
         source.start();
     });
+}
+
+function stopSortSounds() {
+    currentAudioSources.forEach(source => {
+        try {
+            source.stop();
+        } catch (_) {
+            // 이미 종료된 소스는 무시한다.
+        }
+    });
+    currentAudioSources = [];
+}
+
+function updateSoundToggle() {
+    const button = document.getElementById('sound-toggle');
+    button.setAttribute('aria-pressed', String(soundEnabled));
+    button.innerText = soundEnabled ? '🔊 SOUND ON' : '🔇 SOUND OFF';
+}
+
+async function toggleSortSound() {
+    soundEnabled = !soundEnabled;
+    updateSoundToggle();
+
+    if (!soundEnabled) {
+        stopSortSounds();
+        return;
+    }
+
+    try {
+        await ensureSortSoundReady();
+        resumeSortSound();
+    } catch (error) {
+        console.error(error);
+        soundEnabled = false;
+        updateSoundToggle();
+    }
 }
 
 function resumeSortSound() {
@@ -277,6 +328,5 @@ function resumeSortSound() {
     }
 }
 
-window.addEventListener('pointerdown', resumeSortSound, { once: true });
-window.addEventListener('keydown', resumeSortSound, { once: true });
+document.getElementById('sound-toggle').addEventListener('click', toggleSortSound);
 execute().catch(error => console.error(error));

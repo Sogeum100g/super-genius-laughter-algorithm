@@ -15,23 +15,38 @@
             border: 1px solid #000;
         }
 
-        #canvas-label {
+        #status-panel {
             position: absolute;
             top: 8px;
             right: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #canvas-label,
+        #sound-toggle {
             font-size: 20px;
             color: #fff;
             background-color: rgba(0, 0, 0, 0.5);
             padding: 6px 12px;
+        }
+
+        #sound-toggle {
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            cursor: pointer;
         }
     </style>
 </head>
 
 <body>
     <canvas id="canvas"></canvas>
-    <div id="canvas-label"></div>
+    <div id="status-panel">
+        <div id="canvas-label"></div>
+        <button id="sound-toggle" type="button" aria-pressed="false">🔇 SOUND OFF</button>
+    </div>
     <script src="./stratgy.js?v=20260921"></script>
-    <script src="./main.js?v=20260921"></script>
+    <script src="./main.js?v=20260921-2"></script>
 </body>
 
 </html>
