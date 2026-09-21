@@ -19,7 +19,11 @@ async function execute(){
     });
     image.src = './image.png';
 
-    await Promise.all([imageReady, prepareSortSound()]);
+    // 음원 준비가 늦거나 자동재생이 차단되어도 시각화는 즉시 시작한다.
+    sortSoundReady ||= prepareSortSound().catch(error => {
+        console.error(error);
+    });
+    await imageReady;
 
     const frameDuration = 30
     const slowInterval = 10
@@ -53,6 +57,7 @@ async function execute(){
             yieldCompare: true, image, ctx, arr: sortedArray, interval:fastInterval, frameDuration,
             generator: accentGenerator, playStepSound: false,
         });
+        await sortSoundReady;
         await playCompletionSound();
 
     }
@@ -175,6 +180,7 @@ function asleep(ms) {
 let currentAudioSources = [];
 let audioCtx;
 let sortSoundBuffer;
+let sortSoundReady;
 
 async function prepareSortSound() {
     audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
@@ -273,6 +279,4 @@ function resumeSortSound() {
 
 window.addEventListener('pointerdown', resumeSortSound, { once: true });
 window.addEventListener('keydown', resumeSortSound, { once: true });
-window.addEventListener('load', () => {
-    execute().catch(error => console.error(error));
-}, { once: true });
+execute().catch(error => console.error(error));
