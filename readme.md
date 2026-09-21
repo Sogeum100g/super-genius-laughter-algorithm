@@ -1,6 +1,6 @@
 https://github.com/byongshintv/changsub-normalization-sorting-algorithm
 大昌燮의 chaotic 요소를 正常化하는 프로젝트를
-genius한 웃음의 protagonist를 sorting algorithm으로 재해석(解釋)합니다.
+genius한 웃음을 갖는 protagonist에 sorting algorithm을 적용하여 재해석(解釋)합니다.
 
 
 ## 브라우저
