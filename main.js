@@ -7,34 +7,29 @@ async function execute(){
     canvas.height = innerHeight;
     const ctx = canvas.getContext('2d');
 
-    const img = 'https://i.imgur.com/Y31jrM1.jpeg';
     const image = new Image();
-    image.src = img;
+    const imageReady = new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = () => reject(new Error('image.png을 불러오지 못했습니다.'));
+    });
+    image.src = './image.png';
 
-    const frameDuration = document.querySelector("#frameDuration").value * 1
-    const slowInterval = document.querySelector("#slowInterval").value * 1
-    const fastInterval = document.querySelector("#fastInterval").value * 1
-    const slowN = document.querySelector("#slowN").value * 1
-    const fastN = document.querySelector("#fastN").value * 1
-    document.getElementById('presetForm').remove();
+    await Promise.all([imageReady, prepareSortSound()]);
+
+    const frameDuration = 30
+    const slowInterval = 10
+    const fastInterval = 5
+    const slowN = 128
+    const fastN = 64
 
     for(let [isEfficient, sortGen,sortGenName] of [
-        [true, mergeSort, "병합 정렬"],
+        [false, bubbleSort, "버블 정렬"],
         [false, selectionSort, "선택 정렬"],
         [false, insertionSort, "삽입 정렬"],
-        [false, binaryInsertionSort, "이진 삽입 정렬"],
+        [true, mergeSort, "병합 정렬"],
         [true, quickSort, "퀵 정렬"],
-        [false, bubbleSort, "버블 정렬"],
-        [false, cocktailShakerSort, "칵테일 쉐이커 정렬"],
-        [false, gnomeSort, "놈 정렬"],
-        [false, combSort, "콤 정렬"],
-        [false, shellSort, "셸 정렬"],
         [true, heapSort, "힙 정렬"],
-        [false, oddEvenSort, "홀짝 정렬"],
-        [true, bitonicSort, "바이토닉 정렬"],
-        [false, cycleSort, "사이클 정렬"],
-        [false, lsdRadixSort, "LSD 기수 정렬"],
-        [false, bogoSort, "보고 정렬"],
+        [true, lsdRadixSort, "LSD 기수 정렬"],
     ]){
         const n = isEfficient ? slowN : fastN;
         const interval = isEfficient ? slowInterval : fastInterval;
@@ -155,7 +150,7 @@ async function animateSort({ image, ctx, arr, interval, frameDuration, generator
         }
         
         rearrangeImage({ order: combinedArray, image, ctx, colored: combinedColored });
-        playBeep({ duration: Math.max(frameDuration, interval), n: arr.length, indexes: Array.from(combinedSoundIndexes), type: 'square' });
+        playSortSound({ duration: Math.max(frameDuration, interval), n: arr.length, indexes: Array.from(combinedSoundIndexes) });
         await asleep(Math.max(frameDuration, interval));
     }
     
@@ -169,44 +164,61 @@ function asleep(ms) {
 }
 
 
-let currentOscillators = [];
+let currentAudioSources = [];
 let audioCtx;
-function playBeep({ duration, n, indexes, type = 'sine' }) {
-    audioCtx ||= new (window.AudioContext || window.webkitAudioContext)(); 
-  // 이전에 실행 중인 모든 oscillator를 정지
-  currentOscillators.forEach((oscillator) => oscillator.stop());
-  currentOscillators = []; // 배열 초기화
-  // indexes 배열을 순회하며 각 음을 재생
-  indexes.forEach((i) => {
-    const frequency = calculateFrequency(n, i);
+let sortSoundBuffer;
 
-    // OscillatorNode 생성
-    const oscillator = audioCtx.createOscillator();
-    oscillator.type = type; 
-    oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+async function prepareSortSound() {
+    audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    await audioCtx.resume();
 
-    // GainNode 생성 (볼륨 조절)
-    const gainNode = audioCtx.createGain();
-    gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    if (sortSoundBuffer) return;
 
-    // 노드 연결: Oscillator -> Gain -> Destination
-    oscillator.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
+    const response = await fetch('./laugh.mp3');
+    if (!response.ok) {
+        throw new Error('laugh.mp3를 불러오지 못했습니다.');
+    }
 
-    // 소리 재생 시작 및 정지 예약
-    oscillator.start();
-    oscillator.stop(audioCtx.currentTime + duration / 1000);
-
-    // 현재 oscillator를 배열에 추가
-    currentOscillators.push(oscillator);
-  });
+    sortSoundBuffer = await audioCtx.decodeAudioData(await response.arrayBuffer());
 }
 
-function calculateFrequency(n, i) {
-    // 듣기좋은 주파수 범위: 20Hz ~ 20kHz
-    const minFrequency = 20;
-    const maxFrequency = 6000;
+function playSortSound({ duration, n, indexes }) {
+    if (!audioCtx || !sortSoundBuffer || indexes.length === 0) return;
 
-    const frequency = minFrequency + (maxFrequency - minFrequency) * (i / n);
-    return frequency;
+    // 프레임마다 지나치게 많은 소리가 겹치지 않도록 오래된 소스를 정리한다.
+    while (currentAudioSources.length >= 6) {
+        const oldestSource = currentAudioSources.shift();
+        try {
+            oldestSource.stop();
+        } catch (_) {
+            // 이미 종료된 소스는 무시한다.
+        }
+    }
+
+    const grainDuration = Math.min(
+        Math.max(duration / 1000, 0.12),
+        sortSoundBuffer.duration
+    );
+
+    // 한 프레임에서 최대 두 위치만 재생한다. 인덱스에 따라 웃음소리의
+    // 재생 위치와 속도가 달라져 기존 음높이 기반 피드백을 대신한다.
+    indexes.slice(0, 2).forEach((i) => {
+        const normalizedIndex = i / Math.max(n - 1, 1);
+        const source = audioCtx.createBufferSource();
+        const gainNode = audioCtx.createGain();
+        const maxOffset = Math.max(sortSoundBuffer.duration - grainDuration, 0);
+
+        source.buffer = sortSoundBuffer;
+        source.playbackRate.value = 0.8 + normalizedIndex * 0.7;
+        gainNode.gain.value = 0.1;
+
+        source.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        source.start(0, normalizedIndex * maxOffset, grainDuration);
+        currentAudioSources.push(source);
+
+        source.onended = () => {
+            currentAudioSources = currentAudioSources.filter(item => item !== source);
+        };
+    });
 }
