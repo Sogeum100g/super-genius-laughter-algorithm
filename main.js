@@ -43,7 +43,7 @@ async function execute(){
         const n = isEfficient ? slowN : fastN;
         const interval = isEfficient ? slowInterval : fastInterval;
         //#canvas-label에 function 이름을 출력합니다.
-        document.getElementById('canvas-label').innerText = `${sortGenName}(${sortGen.name})`;
+        document.getElementById('canvas-label').innerText = `${sortGenName}`;
         const arr = Array.from({ length: n }, (_, i) => i);
 
         const shuffledArray = await animateSort({
