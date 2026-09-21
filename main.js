@@ -32,13 +32,13 @@ async function execute(){
     const fastN = 64
 
     for(let [isEfficient, sortGen,sortGenName] of [
-        [false, bubbleSort, "버블 정렬"],
-        [false, selectionSort, "선택 정렬"],
-        [false, insertionSort, "삽입 정렬"],
-        [true, mergeSort, "병합 정렬"],
-        [true, quickSort, "퀵 정렬"],
-        [true, heapSort, "힙 정렬"],
-        [true, lsdRadixSort, "LSD 기수 정렬"],
+        [false, bubbleSort, "BUBBLE 整列"],
+        [false, selectionSort, "SELECTION 整列"],
+        [false, insertionSort, "INSERTION 整列"],
+        [true, mergeSort, "MERGE 整列"],
+        [true, quickSort, "QUICK 整列"],
+        [true, heapSort, "HEAP 整列"],
+        [true, lsdRadixSort, "LSD RADIX 整列"],
     ]){
         const n = isEfficient ? slowN : fastN;
         const interval = isEfficient ? slowInterval : fastInterval;
