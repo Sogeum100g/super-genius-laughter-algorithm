@@ -36,6 +36,20 @@
             border: 1px solid rgba(255, 255, 255, 0.5);
             cursor: pointer;
         }
+
+        @media (max-width: 600px) {
+            #status-panel {
+                top: 4px;
+                right: 4px;
+                gap: 4px;
+            }
+
+            #canvas-label,
+            #sound-toggle {
+                font-size: 14px;
+                padding: 4px 7px;
+            }
+        }
     </style>
 </head>
 
@@ -46,7 +60,7 @@
         <button id="sound-toggle" type="button" aria-pressed="false">🔇</button>
     </div>
     <script src="./stratgy.js?v=20260921"></script>
-    <script src="./main.js?v=20260921-2"></script>
+    <script src="./main.js?v=20260921-3"></script>
 </body>
 
 </html>

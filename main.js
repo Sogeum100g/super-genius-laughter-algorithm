@@ -68,107 +68,100 @@ async function execute(){
 }
 
 
-function rearrangeImage({ order, image, ctx, width = ctx.canvas.width, height = ctx.canvas.height, colored = [] }) {
+function rearrangeImage({ order, image, ctx, colored = [] }) {
     const canvas = ctx.canvas;
-
-    canvas.width = width;
-    canvas.height = height;
-
-    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-
     const segmentCount = order.length;
-    const segmentWidth = Math.floor(canvas.width / segmentCount);
-    const remainder = canvas.width % segmentCount;
-
-    let segments = [];
-
-    let accumulatedWidth = 0;
-    for (let i = 0; i < segmentCount; i++) {
-        const currentSegmentWidth = i < remainder ? segmentWidth + 1 : segmentWidth;
-
-        const segmentCanvas = document.createElement('canvas');
-        segmentCanvas.width = currentSegmentWidth;
-        segmentCanvas.height = canvas.height;
-        const segmentCtx = segmentCanvas.getContext('2d');
-
-        segmentCtx.drawImage(
-            canvas,
-            accumulatedWidth, 0, currentSegmentWidth, canvas.height, 
-            0, 0, currentSegmentWidth, canvas.height 
-        );
-
-        segments.push(segmentCanvas);
-        accumulatedWidth += currentSegmentWidth;
-    }
-
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    accumulatedWidth = 0;
-    for (let i = 0; i < segmentCount; i++) {
-        const currentSegmentWidth = i < remainder ? segmentWidth + 1 : segmentWidth;
-        const segmentIndex = order[i];
-        const segment = segments[segmentIndex];
-        ctx.drawImage(segment, accumulatedWidth, 0);
-        accumulatedWidth += currentSegmentWidth;
+    // 원본 이미지에서 필요한 조각을 바로 복사한다. 프레임마다 임시 Canvas를
+    // 생성하던 기존 방식보다 메모리 할당과 drawImage 호출이 절반 이하로 줄어든다.
+    for (let destinationIndex = 0; destinationIndex < segmentCount; destinationIndex++) {
+        const sourceIndex = order[destinationIndex];
+        const sourceX = sourceIndex * image.naturalWidth / segmentCount;
+        const sourceWidth = image.naturalWidth / segmentCount;
+        const destinationX = Math.floor(destinationIndex * canvas.width / segmentCount);
+        const destinationEnd = Math.ceil((destinationIndex + 1) * canvas.width / segmentCount);
+
+        ctx.drawImage(
+            image,
+            sourceX, 0, sourceWidth, image.naturalHeight,
+            destinationX, 0, destinationEnd - destinationX, canvas.height
+        );
     }
 
     for (const { indexes, color } of colored) {
-        ctx.globalCompositeOperation = 'source-atop';
-        ctx.fillStyle = color; 
+        ctx.fillStyle = color;
         indexes.forEach(index => {
-            const currentSegmentWidth = index < remainder ? segmentWidth + 1 : segmentWidth;
-            const segmentXPosition = index * segmentWidth;
-            ctx.fillRect(segmentXPosition, 0, currentSegmentWidth, canvas.height);
+            const x = Math.floor(index * canvas.width / segmentCount);
+            const end = Math.ceil((index + 1) * canvas.width / segmentCount);
+            ctx.fillRect(x, 0, end - x, canvas.height);
         });
-        ctx.globalCompositeOperation = 'source-over';
     }
 }
 
 
 async function animateSort({ image, ctx, arr, interval, frameDuration, generator, yieldCompare, playStepSound = true }) {
-    let finalArray = [...arr]; 
-    let colorAndSoundQueue = [];
+    const workingArray = [...arr];
+    const iterator = generator(workingArray, yieldCompare);
+    let finalArray = [...workingArray];
     const numStepsPerFrame = Math.ceil(frameDuration / interval);
-    let i = 0;
-    
-    for (let result of generator(finalArray, yieldCompare)) {
-        i++;
-        if (i > 80000) break;
-        const { array, swappedIndexes = [], compareIndexes = [], comparisons, swaps } = result;
-        
-        colorAndSoundQueue.push({
-            array,
-            colored: [
-                { indexes: compareIndexes, color: 'rgba(255, 0, 0, 0.5)' },
-                { indexes: swappedIndexes, color: 'rgba(0, 255, 0, 0.5)' },
-            ],
-            soundIndexes: compareIndexes.length === 0 ? swappedIndexes : compareIndexes
-        });
-        
-        finalArray = array;
-    }
-    
-    while (colorAndSoundQueue.length > 0) {
-        let combinedArray;
+    const targetFrameDuration = Math.max(frameDuration, interval);
+    const maxSteps = 80000;
+    let totalSteps = 0;
+    let finished = false;
+
+    // 정렬 결과 전체를 큐에 저장하지 않고 한 프레임 분량만 즉시 소비한다.
+    while (!finished && totalSteps < maxSteps) {
+        const frameStartedAt = performance.now();
+        let combinedArray = finalArray;
         let combinedColored = [];
         let combinedSoundIndexes = new Set();
+        let hasFrame = false;
 
-        for (let i = 0; i < numStepsPerFrame && colorAndSoundQueue.length > 0; i++) {
-            let { array, colored, soundIndexes } = colorAndSoundQueue.shift();
+        for (let step = 0; step < numStepsPerFrame && totalSteps < maxSteps; step++) {
+            const next = iterator.next();
+
+            if (next.done) {
+                finished = true;
+                if (Array.isArray(next.value)) finalArray = [...next.value];
+                break;
+            }
+
+            totalSteps++;
+            hasFrame = true;
+
+            const {
+                array,
+                swappedIndexes = [],
+                compareIndexes = [],
+            } = next.value;
+
             combinedArray = array;
-            combinedColored.push(...colored);
-            if(i === 0){
+            finalArray = array;
+            combinedColored.push(
+                { indexes: compareIndexes, color: 'rgba(255, 0, 0, 0.5)' },
+                { indexes: swappedIndexes, color: 'rgba(0, 255, 0, 0.5)' },
+            );
+
+            if (step === 0) {
+                const soundIndexes = compareIndexes.length === 0 ? swappedIndexes : compareIndexes;
                 soundIndexes.forEach(index => combinedSoundIndexes.add(index));
             }
         }
-        
+
+        if (!hasFrame) break;
+
         rearrangeImage({ order: combinedArray, image, ctx, colored: combinedColored });
         if (playStepSound) {
             playSortSound({ duration: Math.max(frameDuration, interval), n: arr.length, indexes: Array.from(combinedSoundIndexes) });
         }
-        await asleep(Math.max(frameDuration, interval));
+
+        // 렌더링에 걸린 시간을 제외한 만큼만 기다려 목표 프레임 속도를 유지한다.
+        const renderDuration = performance.now() - frameStartedAt;
+        await asleep(Math.max(targetFrameDuration - renderDuration, 0));
     }
-    
+
+    if (!finished && typeof iterator.return === 'function') iterator.return();
     rearrangeImage({ order: finalArray, image, ctx });
     return finalArray;
 }
