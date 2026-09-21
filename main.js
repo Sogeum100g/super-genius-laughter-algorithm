@@ -1,6 +1,11 @@
 
 // canvas 크기 초기화
+let hasStarted = false;
+
 async function execute(){
+    if (hasStarted) return;
+    hasStarted = true;
+
     const canvas = document.getElementById('canvas');
 
     canvas.width = innerWidth;
@@ -45,9 +50,10 @@ async function execute(){
             yieldCompare: true, image, ctx, arr: shuffledArray, interval, frameDuration, generator: sortGen,
         });
         await animateSort({
-            yieldCompare: true, image, ctx, arr: sortedArray, interval:fastInterval, frameDuration, generator: accentGenerator,
+            yieldCompare: true, image, ctx, arr: sortedArray, interval:fastInterval, frameDuration,
+            generator: accentGenerator, playStepSound: false,
         });
-        await asleep(2000);
+        await playCompletionSound();
 
     }
 
@@ -112,7 +118,7 @@ function rearrangeImage({ order, image, ctx, width = ctx.canvas.width, height = 
 }
 
 
-async function animateSort({ image, ctx, arr, interval, frameDuration, generator, yieldCompare }) {
+async function animateSort({ image, ctx, arr, interval, frameDuration, generator, yieldCompare, playStepSound = true }) {
     let finalArray = [...arr]; 
     let colorAndSoundQueue = [];
     const numStepsPerFrame = Math.ceil(frameDuration / interval);
@@ -150,7 +156,9 @@ async function animateSort({ image, ctx, arr, interval, frameDuration, generator
         }
         
         rearrangeImage({ order: combinedArray, image, ctx, colored: combinedColored });
-        playSortSound({ duration: Math.max(frameDuration, interval), n: arr.length, indexes: Array.from(combinedSoundIndexes) });
+        if (playStepSound) {
+            playSortSound({ duration: Math.max(frameDuration, interval), n: arr.length, indexes: Array.from(combinedSoundIndexes) });
+        }
         await asleep(Math.max(frameDuration, interval));
     }
     
@@ -170,7 +178,7 @@ let sortSoundBuffer;
 
 async function prepareSortSound() {
     audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
-    await audioCtx.resume();
+    audioCtx.resume().catch(() => {});
 
     if (sortSoundBuffer) return;
 
@@ -222,3 +230,49 @@ function playSortSound({ duration, n, indexes }) {
         };
     });
 }
+
+async function playCompletionSound() {
+    if (!audioCtx || !sortSoundBuffer) return;
+
+    if (audioCtx.state !== 'running') {
+        audioCtx.resume().catch(() => {});
+    }
+
+    // 자동재생이 차단된 상태에서는 시각화가 멈추지 않도록 다음 단계로 진행한다.
+    if (audioCtx.state !== 'running') return;
+
+    currentAudioSources.forEach(source => {
+        try {
+            source.stop();
+        } catch (_) {
+            // 이미 종료된 소스는 무시한다.
+        }
+    });
+    currentAudioSources = [];
+
+    await new Promise(resolve => {
+        const source = audioCtx.createBufferSource();
+        const gainNode = audioCtx.createGain();
+
+        source.buffer = sortSoundBuffer;
+        source.playbackRate.value = 1;
+        gainNode.gain.value = 0.25;
+
+        source.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        source.onended = resolve;
+        source.start();
+    });
+}
+
+function resumeSortSound() {
+    if (audioCtx?.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+    }
+}
+
+window.addEventListener('pointerdown', resumeSortSound, { once: true });
+window.addEventListener('keydown', resumeSortSound, { once: true });
+window.addEventListener('load', () => {
+    execute().catch(error => console.error(error));
+}, { once: true });
