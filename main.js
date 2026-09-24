@@ -28,11 +28,11 @@ async function execute(){
     const fastN = 64
 
     for(let [isEfficient, sortGen,sortGenName] of [
-        [false, bubbleSort, "BUBBLE 整列"],
-        [false, selectionSort, "SELECTION 整列"],
         [false, insertionSort, "INSERTION 整列"],
-        [true, mergeSort, "MERGE 整列"],
         [true, quickSort, "QUICK 整列"],
+        [true, mergeSort, "MERGE 整列"],
+        [false, selectionSort, "SELECTION 整列"],
+        [false, bubbleSort, "BUBBLE 整列"],
         [true, heapSort, "HEAP 整列"],
         [true, lsdRadixSort, "LSD RADIX 整列"],
     ]){
