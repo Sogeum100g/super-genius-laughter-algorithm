@@ -176,7 +176,7 @@ let currentAudioSources = [];
 let audioCtx;
 let sortSoundBuffer;
 let sortSoundReady;
-let soundEnabled = false;
+let soundEnabled = true;
 
 function ensureSortSoundReady() {
     sortSoundReady ||= prepareSortSound().catch(error => {
@@ -297,7 +297,7 @@ function updateSoundToggle() {
 }
 
 async function toggleSortSound() {
-    // soundEnabled = !soundEnabled; 기본 설정: 음소거
+    soundEnabled = !soundEnabled;
     updateSoundToggle();
 
     if (!soundEnabled) {
@@ -321,5 +321,19 @@ function resumeSortSound() {
     }
 }
 
+async function unlockSortSound() {
+    if (!soundEnabled) return;
+
+    try {
+        await ensureSortSoundReady();
+        resumeSortSound();
+    } catch (error) {
+        console.error(error);
+    }
+}
+
 document.getElementById('sound-toggle').addEventListener('click', toggleSortSound);
+document.addEventListener('pointerdown', unlockSortSound, { once: true });
+document.addEventListener('keydown', unlockSortSound, { once: true });
+updateSoundToggle();
 execute().catch(error => console.error(error));
