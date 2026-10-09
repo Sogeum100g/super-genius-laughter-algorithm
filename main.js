@@ -297,7 +297,7 @@ function updateSoundToggle() {
 }
 
 async function toggleSortSound() {
-    soundEnabled = !soundEnabled;
+    // soundEnabled = !soundEnabled; 기본 설정: 음소거
     updateSoundToggle();
 
     if (!soundEnabled) {
